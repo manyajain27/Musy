@@ -1,0 +1,12 @@
+# build output
+musy
+*.app/
+
+# python leftovers from an earlier attempt
+venv/
+*.pyc
+__pycache__/
+
+# editor / os
+.claude/
+.DS_Store
