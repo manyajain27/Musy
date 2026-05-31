@@ -21,6 +21,8 @@ final class PlayerModel: ObservableObject {
     private var posTimestamp = Date()
     private var currentURI: String?
     private var artCache: [String: NSImage] = [:]   // keep art around so revisiting a song is instant
+    private var artOrder: [String] = []             // so the cache doesn't grow forever
+    private let artCacheLimit = 80
 
     private var pollTimer: Timer?
     private var renderTimer: Timer?
@@ -35,17 +37,22 @@ final class PlayerModel: ObservableObject {
         pollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.poll() }
         }
-        renderTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        renderTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
         poll()
     }
 
-    // fake the position forward between polls instead of waiting on spotify
+    // fake the position forward between polls instead of waiting on spotify.
+    // only write when it actually moved, otherwise we'd redraw for nothing
+    // (e.g. paused or closed) and burn battery
     private func tick() {
-        guard !isClosed, duration > 0 else { displayElapsed = 0; return }
-        let e = isPlaying ? position + Date().timeIntervalSince(posTimestamp) : position
-        displayElapsed = min(e, duration)
+        var target = 0.0
+        if !isClosed, duration > 0 {
+            let e = isPlaying ? position + Date().timeIntervalSince(posTimestamp) : position
+            target = min(e, duration)
+        }
+        if abs(target - displayElapsed) > 0.01 { displayElapsed = target }
     }
 
     // one liner if spotify is dead, otherwise dump everything split by ~|~
@@ -70,7 +77,7 @@ final class PlayerModel: ObservableObject {
         p.arguments = ["-e", src]
         let pipe = Pipe()
         p.standardOutput = pipe
-        p.standardError = Pipe()
+        p.standardError = FileHandle.nullDevice   // don't let a stderr buffer fill up and hang us
         do { try p.run() } catch { return nil }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
@@ -136,7 +143,13 @@ final class PlayerModel: ObservableObject {
                 Task { @MainActor [weak self] in
                     // bail if the song already moved on while this was downloading
                     guard let self, let img = NSImage(data: idata) else { return }
-                    self.artCache[trackID] = img
+                    if self.artCache[trackID] == nil {
+                        self.artCache[trackID] = img
+                        self.artOrder.append(trackID)
+                        if self.artOrder.count > self.artCacheLimit {
+                            self.artCache[self.artOrder.removeFirst()] = nil
+                        }
+                    }
                     if self.currentURI?.hasSuffix(trackID) == true { self.artwork = img }
                 }
             }.resume()
