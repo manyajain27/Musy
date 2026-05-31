@@ -264,7 +264,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false   // os shadow drew a weird double outline, art has its own
-        window.level = .floating
+        // sit on the wallpaper behind every app window instead of floating on top
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)))
         window.isMovableByWindowBackground = true
         window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         window.setContentSize(hosting.fittingSize)
