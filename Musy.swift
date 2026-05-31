@@ -17,6 +17,11 @@ final class PlayerModel: ObservableObject {
     @Published var duration: Double = 0
     @Published var displayElapsed: Double = 0
 
+    // light text for dark wallpapers, dark text for light ones. remembered across launches
+    @Published var lightText: Bool = UserDefaults.standard.bool(forKey: "musy.lightText") {
+        didSet { UserDefaults.standard.set(lightText, forKey: "musy.lightText") }
+    }
+
     private var position: Double = 0
     private var posTimestamp = Date()
     private var currentURI: String?
@@ -168,6 +173,9 @@ struct MusyView: View {
     private let artSize: CGFloat = 132
     private let cardWidth: CGFloat = 296
 
+    private var ink: Color  { model.lightText ? .white : .black }   // text + bar
+    private var glow: Color { model.lightText ? .black : .white }   // soft halo behind text so it reads
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             artwork
@@ -178,6 +186,9 @@ struct MusyView: View {
         .padding(20)
         .frame(width: cardWidth, alignment: .leading)
         .contextMenu {
+            Button(model.lightText ? "Use Dark Text" : "Use Light Text") {
+                model.lightText.toggle()
+            }
             Button("Quit Musy") { NSApp.terminate(nil) }
         }
     }
@@ -191,11 +202,11 @@ struct MusyView: View {
                     .aspectRatio(contentMode: .fill)
             } else {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.black.opacity(0.06))
+                    .fill(ink.opacity(0.06))
                     .overlay(
                         Image(systemName: "music.note")
                             .font(.system(size: 30, weight: .regular))
-                            .foregroundStyle(.black.opacity(0.35))
+                            .foregroundStyle(ink.opacity(0.35))
                     )
             }
         }
@@ -203,7 +214,7 @@ struct MusyView: View {
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(.black.opacity(0.1), lineWidth: 1)
+                .stroke(ink.opacity(0.1), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.25), radius: 10, x: 0, y: 5)
     }
@@ -214,23 +225,23 @@ struct MusyView: View {
             if model.isClosed {
                 Text("Spotify is closed")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.black.opacity(0.8))
+                    .foregroundStyle(ink.opacity(0.8))
             } else {
                 Text(model.title)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(ink)
                     .lineLimit(1).truncationMode(.tail)
                 Text(model.album)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.black.opacity(0.72))
+                    .foregroundStyle(ink.opacity(0.72))
                     .lineLimit(1).truncationMode(.tail)
                 Text(model.artist)
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(.black.opacity(0.55))
+                    .foregroundStyle(ink.opacity(0.55))
                     .lineLimit(1).truncationMode(.tail)
             }
         }
-        .shadow(color: .white.opacity(0.5), radius: 1.5, x: 0, y: 0.5)
+        .shadow(color: glow.opacity(0.5), radius: 1.5, x: 0, y: 0.5)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -238,9 +249,9 @@ struct MusyView: View {
         VStack(spacing: 5) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(.black.opacity(0.2))
+                    Capsule().fill(ink.opacity(0.2))
                     Capsule()
-                        .fill(model.isPlaying ? .black : .black.opacity(0.5))   // dim it when paused
+                        .fill(model.isPlaying ? ink : ink.opacity(0.5))   // dim it when paused
                         .frame(width: geo.size.width * model.fraction)
                 }
             }
@@ -252,16 +263,18 @@ struct MusyView: View {
                 Text(model.remainingString)
             }
             .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(.black.opacity(0.65))
-            .shadow(color: .white.opacity(0.5), radius: 2)
+            .foregroundStyle(ink.opacity(0.65))
+            .shadow(color: glow.opacity(0.5), radius: 2)
         }
         .frame(height: 26)
     }
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var window: NSWindow!
+    var statusItem: NSStatusItem!
+    private var lightItem: NSMenuItem!
     let model = PlayerModel()
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -292,7 +305,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.setFrameAutosaveName(autosave)
 
         window.makeKeyAndOrderFront(nil)
+        setupMenuBar()
     }
+
+    private func setupMenuBar() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.button?.image = NSImage(systemSymbolName: "music.note",
+                                           accessibilityDescription: "Musy")
+        let menu = NSMenu()
+        menu.delegate = self
+        lightItem = NSMenuItem(title: "Light Text", action: #selector(toggleText), keyEquivalent: "")
+        lightItem.target = self
+        menu.addItem(lightItem)
+        menu.addItem(.separator())
+        let quit = NSMenuItem(title: "Quit Musy", action: #selector(quitApp), keyEquivalent: "q")
+        quit.target = self
+        menu.addItem(quit)
+        statusItem.menu = menu
+    }
+
+    // keep the checkmark in sync even if it was toggled from the right-click menu
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        lightItem.state = model.lightText ? .on : .off
+    }
+
+    @objc private func toggleText() { model.lightText.toggle() }
+    @objc private func quitApp()    { NSApp.terminate(nil) }
 }
 
 MainActor.assumeIsolated {
