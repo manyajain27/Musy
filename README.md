@@ -1,61 +1,23 @@
 # Musy
 
-A minimal Spotify now-playing widget for macOS. It floats on the desktop with no
-window chrome and no Dock icon, showing the album art, track title, album, artist,
-and a live progress bar. The visual style is tuned for light wallpapers.
+A small Spotify now-playing widget for macOS. It sits on the desktop and shows
+the album art, track, and a progress bar for whatever's playing.
 
-Built with native Swift and SwiftUI. Track info is read from Spotify over
-AppleScript, and cover art is fetched from Spotify's public oEmbed endpoint, so no
-API key or login is required.
+Native Swift/SwiftUI. Reads the track from Spotify via AppleScript and grabs the
+cover from Spotify's public oEmbed endpoint — no API key or login.
 
-## Features
-
-- Transparent, borderless window that sits directly on the desktop
-- Album art, title, album, and artist with smart truncation
-- Live progress bar with elapsed and remaining time, interpolated between updates
-- Artwork is cached per track, so revisiting a song is instant
-- Remembers its position — drag it anywhere and it stays there across launches
-- Runs as a background agent: no Dock icon, no menu bar item
-
-## Requirements
-
-- macOS 26 or later
-- Spotify desktop app installed
-
-## Build & Run
+## Build & run
 
 ```bash
-./build_app.sh   # produces Musy.app
+./build_app.sh   # builds Musy.app
 open Musy.app
 ```
 
-On first launch, macOS will ask for permission to control Spotify — approve it so
-Musy can read the current track.
+First launch asks for permission to control Spotify — allow it. To start it on
+login, add `Musy.app` under System Settings → General → Login Items.
 
-To launch it automatically on login, add `Musy.app` under
-**System Settings → General → Login Items**.
+## Notes
 
-## Usage
-
-- **Move:** drag the widget anywhere; it remembers the position
-- **Quit:** right-click the widget → **Quit Musy**
-
-## Development
-
-Run directly without bundling:
-
-```bash
-swiftc Musy.swift -o musy && ./musy
-```
-
-## How it works
-
-A timer polls Spotify once per second via `osascript`, parsing the track name,
-artist, album, URL, position, duration, and player state. A faster timer
-interpolates the playback position locally so the progress bar stays smooth
-between polls. When the track changes, Musy derives the track ID from the Spotify
-URL and pulls the cover from `open.spotify.com/oembed`, caching it in memory.
-
-## License
-
-MIT
+- Drag to move (it remembers the position).
+- Menu bar icon (or right-click the widget) toggles light/dark text and quits.
+- Needs macOS 26 and the Spotify desktop app.
